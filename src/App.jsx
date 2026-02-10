@@ -1,15 +1,13 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 
-const PLATFORMS = ["Google", "Facebook", "TikTok", "AppLovin", "Apple"];
+const PLATFORMS = ["Google", "Facebook", "TikTok", "AppLovin"];
 const STATUSES = ["uploaded", "uploading", "not_uploaded", "upload_error", "removing", "partially_deleted", "delete_error", "skipped"];
-const RATIOS = ["9:16", "16:9", "1:1", "4:5"];
 
 const ACCOUNT_NAMES = {
   Google: ["Google - US Main", "Google - EU Brand", "Google - APAC Perf"],
   Facebook: ["FB - US Broad", "FB - EU Lookalike"],
   TikTok: ["TikTok - US Spark", "TikTok - UK TopView", "TikTok - DE Reach"],
   AppLovin: ["AppLovin - US iOS", "AppLovin - Global Android"],
-  Apple: ["ASA - US Discovery", "ASA - EU Search"],
 };
 
 const STATUS_CONFIG = {
@@ -38,82 +36,175 @@ const APPS = [
   { id: 4, name: "Space Raiders" },
 ];
 
+const LANGUAGES = ["en", "de", "es", "fr", "ja", "ko", "pt", "it", "zh", "ru"];
+const RESOLUTIONS = [
+  { w: 1080, h: 1920, ratio: "9:16" },
+  { w: 1920, h: 1080, ratio: "16:9" },
+  { w: 1080, h: 1080, ratio: "1:1" },
+  { w: 1080, h: 1350, ratio: "4:5" },
+];
+const DURATIONS = ["15s", "30s", "45s", "60s"];
+
 function pickStatus(messy) {
   const w = messy
-    ? [0.25, 0.1, 0.1, 0.15, 0.08, 0.07, 0.05, 0.2]
-    : [0.55, 0.1, 0.1, 0.05, 0.04, 0.02, 0.02, 0.12];
+    ? [0.30, 0.08, 0.08, 0.20, 0.06, 0.06, 0.06, 0.16]
+    : [0.75, 0.08, 0.06, 0.03, 0.02, 0.01, 0.01, 0.04];
   const r = Math.random();
   let c = 0;
   for (let i = 0; i < w.length; i++) { c += w[i]; if (r < c) return STATUSES[i]; }
   return STATUSES[0];
 }
 
-function generateCreatives(startIdx = 0, count = 12) {
-  const basenames = [
-    "Summer_Sale_Hero", "UA_Gameplay_15s_EN", "Retarget_Boss_Fight_30s",
-    "Install_CTA_Square", "Xmas_Promo_Stories", "Tutorial_Walkthrough_60s",
-    "Reward_Chest_Open", "PvP_Arena_Teaser", "New_Character_Reveal",
-    "Live_Event_Countdown", "Cinematic_Trailer", "Social_UGC_Style",
-    "Endcard_Reward", "Playable_Demo_Cut", "Brand_Intro_Bumper",
-    "Vertical_Story_Ad", "Carousel_Highlights", "Event_Hype_Reel",
-    "Win_Streak_Montage", "Boss_Kill_Compilation", "Loot_Box_Reveal",
-    "Guild_War_Promo", "Season_Pass_Intro", "Limited_Offer_Flash",
-    "Character_Showcase", "Gameplay_Loop_Demo", "Achievement_Unlock",
-    "Daily_Challenge_Ad", "Multiplayer_Chaos", "Idle_Progress_Show",
-    "Upgrade_Path_Demo", "VIP_Benefits_Promo", "Referral_Program_CTA",
-    "Weekend_Event_Hype", "Gacha_Pull_Montage", "Arena_Ranked_Promo",
-    "New_Map_Showcase", "Collab_Event_Teaser", "Anniversary_Special",
-    "Launch_Day_Trailer",
-  ];
-  return Array.from({ length: count }, (_, idx) => {
-    const i = startIdx + idx;
-    const name = basenames[i % basenames.length] + "_v" + (Math.floor(i / basenames.length) + 1);
-    const ratio = RATIOS[i % RATIOS.length];
-    const res = ratio === "9:16" ? "1080×1920" : ratio === "16:9" ? "1920×1080" : ratio === "1:1" ? "1080×1080" : "1080×1350";
-    const messy = i % 5 === 0;
-    const createdAt = new Date(Date.now() - Math.random() * 60 * 86400000);
+// --- Pool generation ---
 
-    const platforms = PLATFORMS.map((p) => {
-      const accounts = ACCOUNT_NAMES[p].map((accName) => {
-        const status = pickStatus(messy);
-        return {
-          accountName: accName,
-          status,
-          skipReason: status === "skipped"
-            ? SKIP_REASONS[Math.floor(Math.random() * SKIP_REASONS.length)].replace("{platform}", p) + " - " + name + ".mp4"
+function generateTicketId(index) {
+  if (index % 3 === 0) return (20000 + index * 7).toString();
+  return Math.random().toString(36).slice(2, 7);
+}
+
+function pickCreativeCount(ticketIndex) {
+  if (ticketIndex === 0) return 500 + Math.floor(Math.random() * 100);
+  if (ticketIndex < 5) return 20 + Math.floor(Math.random() * 30);
+  return 1 + Math.floor(Math.random() * 10);
+}
+
+function generatePool() {
+  const NUM_TICKETS = 100;
+  const tickets = [];
+  const allCreatives = [];
+  let globalId = 1;
+
+  for (let t = 0; t < NUM_TICKETS; t++) {
+    const ticketId = generateTicketId(t);
+    const count = pickCreativeCount(t);
+    const ticketDate = new Date(Date.now() - Math.random() * 60 * 86400000);
+    const messy = t % 7 === 0;
+    const allUploaded = !messy && t % 3 !== 0;
+    const ticketCreatives = [];
+
+    for (let c = 0; c < count; c++) {
+      const lang = LANGUAGES[c % LANGUAGES.length];
+      const res = RESOLUTIONS[c % RESOLUTIONS.length];
+      const dur = DURATIONS[c % DURATIONS.length];
+      const filename = `fc_v_${ticketId}_${lang}_${res.w}x${res.h}_${dur}.mp4`;
+
+      const creative = {
+        id: globalId++,
+        ticketId,
+        filename,
+        language: lang,
+        resolution: `${res.w}x${res.h}`,
+        ratio: res.ratio,
+        duration: dur,
+        width: res.w,
+        height: res.h,
+        thumbnail: `hsl(${(t * 47 + c * 13 + 200) % 360}, 45%, ${22 + (c % 3) * 5}%)`,
+        createdAt: new Date(ticketDate.getTime() - c * 60000),
+        createdAtStr: ticketDate.toLocaleDateString("en-GB"),
+        status: "ACTIVE",
+        campaigns: Math.floor(Math.random() * 8),
+        impressions: Math.floor(Math.random() * 150000),
+        clicks: Math.floor(Math.random() * 3000),
+        platforms: PLATFORMS.map(p => ({
+          name: p,
+          accounts: ACCOUNT_NAMES[p].map(accName => {
+            const status = allUploaded ? "uploaded" : pickStatus(messy);
+            return {
+              accountName: accName,
+              status,
+              skipReason: status === "skipped"
+                ? SKIP_REASONS[Math.floor(Math.random() * SKIP_REASONS.length)].replace("{platform}", p) + " - " + filename
+                : null,
+            };
+          }),
+          link: Math.random() > 0.4
+            ? `https://${p.toLowerCase().replace(" ", "")}.com/ads/library/${Math.random().toString(36).slice(2, 10)}`
             : null,
-        };
-      });
-      const hasLink = Math.random() > 0.4;
-      return {
-        name: p,
-        accounts,
-        link: hasLink ? `https://${p.toLowerCase().replace(" ", "")}.com/ads/library/${Math.random().toString(36).slice(2, 10)}` : null,
+        })),
       };
+      ticketCreatives.push(creative);
+      allCreatives.push(creative);
+    }
+
+    const accountSummary = PLATFORMS.flatMap(pName =>
+      ACCOUNT_NAMES[pName].map(accName => {
+        const counts = { uploaded: 0, uploading: 0, not_uploaded: 0, errors: 0, skipped: 0, removing: 0, total: 0 };
+        ticketCreatives.forEach(cr => {
+          const plat = cr.platforms.find(p => p.name === pName);
+          if (!plat) return;
+          const acc = plat.accounts.find(a => a.accountName === accName);
+          if (!acc) return;
+          counts.total++;
+          if (acc.status === "uploaded") counts.uploaded++;
+          else if (acc.status === "uploading") counts.uploading++;
+          else if (acc.status === "not_uploaded") counts.not_uploaded++;
+          else if (acc.status === "skipped") counts.skipped++;
+          else if (acc.status === "removing") counts.removing++;
+          else counts.errors++;
+        });
+        return { platform: pName, accountName: accName, ...counts };
+      })
+    );
+
+    const platformSummary = PLATFORMS.map(pName => {
+      let uploaded = 0, total = 0, errors = 0;
+      ticketCreatives.forEach(cr => {
+        const plat = cr.platforms.find(p => p.name === pName);
+        if (!plat) return;
+        plat.accounts.forEach(a => {
+          total++;
+          if (a.status === "uploaded") uploaded++;
+          if (["upload_error", "delete_error", "partially_deleted"].includes(a.status)) errors++;
+        });
+      });
+      return { name: pName, uploaded, total, errors };
     });
 
-    return {
-      id: i + 1, name, ratio, resolution: res,
-      status: "ACTIVE",
-      campaigns: Math.floor(Math.random() * 8),
-      impressions: Math.floor(Math.random() * 150000),
-      clicks: Math.floor(Math.random() * 3000),
-      duration: `0:${(15 + Math.floor(Math.random() * 50)).toString().padStart(2, "0")}`,
-      platforms,
-      thumbnail: `hsl(${(i * 47 + 200) % 360}, 45%, ${22 + (i % 3) * 5}%)`,
-      createdAt,
-      createdAtStr: createdAt.toLocaleDateString("en-GB"),
-    };
-  });
+    const totalUploaded = platformSummary.reduce((s, p) => s + p.uploaded, 0);
+    const totalAccounts = platformSummary.reduce((s, p) => s + p.total, 0);
+    const totalErrors = platformSummary.reduce((s, p) => s + p.errors, 0);
+    const totalUploading = accountSummary.reduce((s, a) => s + a.uploading, 0);
+    const totalNotUploaded = accountSummary.reduce((s, a) => s + a.not_uploaded, 0);
+    const totalSkipped = accountSummary.reduce((s, a) => s + a.skipped, 0);
+    const totalRemoving = accountSummary.reduce((s, a) => s + a.removing, 0);
+
+    tickets.push({
+      ticketId,
+      creativeCount: count,
+      thumbnails: ticketCreatives.slice(0, 4).map(c => c.thumbnail),
+      languages: [...new Set(ticketCreatives.map(c => c.language))],
+      resolutions: [...new Set(ticketCreatives.map(c => c.resolution))],
+      durations: [...new Set(ticketCreatives.map(c => c.duration))],
+      latestCreatedAt: ticketCreatives[0].createdAt,
+      latestCreatedAtStr: ticketCreatives[0].createdAtStr,
+      accountSummary,
+      platformSummary,
+      totalUploaded,
+      totalAccounts,
+      totalErrors,
+      totalUploading,
+      totalNotUploaded,
+      totalSkipped,
+      totalRemoving,
+      progressPercent: totalAccounts > 0 ? Math.round((totalUploaded / totalAccounts) * 100) : 0,
+    });
+  }
+
+  return { tickets, creatives: allCreatives };
+}
+
+let cachedPool = null;
+let cachedAppId = null;
+
+function getPool(appId) {
+  if (cachedPool && cachedAppId === appId) return cachedPool;
+  cachedPool = generatePool();
+  cachedAppId = appId;
+  return cachedPool;
 }
 
 const fmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString());
 function getAllAccounts(c) { return c.platforms.flatMap(p => p.accounts); }
-function getAllAccountNames(creatives) {
-  const s = new Set();
-  creatives.forEach(c => c.platforms.forEach(p => p.accounts.forEach(a => s.add(a.accountName))));
-  return [...s].sort();
-}
 
 // --- Components ---
 
@@ -256,6 +347,345 @@ function PlatformSection({ platform, onRetryAccount, onCancelAccount }) {
   );
 }
 
+function TicketCard({ ticket, onClick }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: "linear-gradient(165deg, #1e1d1b 0%, #252420 100%)",
+        borderRadius: 16, overflow: "hidden", cursor: "pointer",
+        border: `1px solid ${hovered ? "rgba(212,190,140,0.25)" : "rgba(255,255,255,0.06)"}`,
+        transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
+        transform: hovered ? "translateY(-2px)" : "translateY(0)",
+        boxShadow: hovered
+          ? "0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(212,190,140,0.1)"
+          : "0 2px 8px rgba(0,0,0,0.2)",
+        display: "flex", flexDirection: "column",
+      }}
+    >
+      <div style={{ padding: "14px 14px 16px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+        {/* Header: ticket ID, creatives count, date, errors */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h3 style={{
+              margin: 0, fontSize: 18, fontWeight: 700, color: "#e8e6e1",
+              letterSpacing: "-0.01em",
+            }}>#{ticket.ticketId}</h3>
+            <span style={{
+              padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+              background: "rgba(212,190,140,0.1)", color: "#d4be8c",
+              border: "1px solid rgba(212,190,140,0.15)",
+            }}>{ticket.creativeCount.toLocaleString()} file{ticket.creativeCount !== 1 ? "s" : ""}</span>
+            {ticket.totalErrors > 0 && (
+              <span style={{
+                padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+                background: "rgba(239,68,68,0.15)", color: "#fca5a5",
+                border: "1px solid rgba(239,68,68,0.2)",
+              }}>{ticket.totalErrors} err</span>
+            )}
+          </div>
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
+            {ticket.latestCreatedAtStr}
+          </span>
+        </div>
+
+        {/* Platform summary */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: "auto" }}>
+          {ticket.platformSummary.map(p => {
+            const pct = p.total > 0 ? (p.uploaded / p.total) * 100 : 0;
+            const color = p.errors > 0 ? "#ef4444" : pct === 100 ? "#22c55e" : "#f59e0b";
+            return (
+              <div key={p.name} style={{
+                display: "flex", alignItems: "center", gap: 8,
+                fontSize: 11, padding: "2px 0",
+              }}>
+                <span style={{ width: 64, color: "#999", fontWeight: 500, flexShrink: 0, fontSize: 10 }}>{p.name}</span>
+                <div style={{
+                  flex: 1, height: 4, borderRadius: 2,
+                  background: "rgba(255,255,255,0.06)", overflow: "hidden",
+                }}>
+                  <div style={{
+                    width: `${pct}%`, height: "100%", borderRadius: 2,
+                    background: color, transition: "width 0.3s",
+                  }} />
+                </div>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, color,
+                  width: 48, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums",
+                }}>{p.uploaded}/{p.total}</span>
+                <span style={{ fontSize: 9, color: "#fca5a5", fontWeight: 500, width: 36, flexShrink: 0, textAlign: "right" }}>
+                  {p.errors > 0 ? `${p.errors} err` : ""}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Overall progress */}
+        <div style={{ marginTop: 4 }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 4,
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>
+              Overall
+            </span>
+            <span style={{
+              fontSize: 11, fontWeight: 700,
+              color: ticket.totalErrors > 0 ? "#fca5a5"
+                : ticket.progressPercent === 100 ? "#22c55e" : "#f59e0b",
+            }}>
+              {ticket.progressPercent}%
+            </span>
+          </div>
+          <div style={{
+            height: 6, borderRadius: 3,
+            background: "rgba(255,255,255,0.06)", overflow: "hidden",
+          }}>
+            <div style={{
+              width: `${ticket.progressPercent}%`, height: "100%", borderRadius: 3,
+              background: ticket.progressPercent === 100
+                ? "#22c55e"
+                : "linear-gradient(90deg, #22c55e, #f59e0b)",
+              transition: "width 0.3s",
+            }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TicketListRow({ ticket, onViewCreatives }) {
+  const [hovered, setHovered] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const isComplete = ticket.progressPercent === 100;
+  const hasErrors = ticket.totalErrors > 0;
+  const borderColor = expanded ? "rgba(212,190,140,0.15)" : hovered ? "rgba(212,190,140,0.2)" : hasErrors ? "rgba(239,68,68,0.25)" : isComplete ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.05)";
+  const bgDefault = hasErrors ? "rgba(239,68,68,0.08)" : isComplete ? "rgba(34,197,94,0.06)" : "rgba(255,255,255,0.015)";
+  const bgHover = hasErrors ? "rgba(239,68,68,0.12)" : isComplete ? "rgba(34,197,94,0.1)" : "rgba(255,255,255,0.04)";
+
+  // Status pills to show (only non-zero, skip uploaded for non-complete)
+  const statusPills = [];
+  if (hasErrors) statusPills.push({ label: `${ticket.totalErrors.toLocaleString()} errors`, color: "#ef4444", bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.25)" });
+  if (ticket.totalUploading > 0) statusPills.push({ label: `${ticket.totalUploading.toLocaleString()} uploading`, color: "#f59e0b", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.2)" });
+  if (ticket.totalNotUploaded > 0) statusPills.push({ label: `${ticket.totalNotUploaded.toLocaleString()} queued`, color: "#6b6b6b", bg: "rgba(107,107,107,0.1)", border: "rgba(107,107,107,0.15)" });
+  if (ticket.totalSkipped > 0) statusPills.push({ label: `${ticket.totalSkipped.toLocaleString()} skipped`, color: "#6b6b6b", bg: "rgba(107,107,107,0.1)", border: "rgba(107,107,107,0.15)" });
+  if (ticket.totalRemoving > 0) statusPills.push({ label: `${ticket.totalRemoving.toLocaleString()} removing`, color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.2)" });
+
+  return (
+    <div style={{
+      borderRadius: 10, overflow: "hidden",
+      border: `1px solid ${borderColor}`,
+      transition: "border-color 0.15s",
+    }}>
+      {/* Compact row */}
+      <div
+        onClick={() => setExpanded(!expanded)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          background: expanded || hovered ? bgHover : bgDefault,
+          cursor: "pointer",
+          transition: "background 0.15s",
+          padding: "10px 16px",
+          display: "flex", alignItems: "center", gap: 14,
+        }}
+      >
+        {/* Expand arrow */}
+        <span style={{
+          fontSize: 9, color: "rgba(255,255,255,0.4)", flexShrink: 0, width: 10,
+          transition: "transform 0.2s", display: "inline-block",
+          transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+        }}>▶</span>
+
+        {/* Ticket ID */}
+        <span style={{
+          fontSize: 14, fontWeight: 700, color: "#e8e6e1",
+          width: 120, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>#{ticket.ticketId}</span>
+
+        {/* File count */}
+        <span style={{
+          padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+          background: "rgba(212,190,140,0.1)", color: "#d4be8c",
+          border: "1px solid rgba(212,190,140,0.15)",
+          whiteSpace: "nowrap", flexShrink: 0,
+        }}>{ticket.creativeCount.toLocaleString()} file{ticket.creativeCount !== 1 ? "s" : ""}</span>
+
+        {/* Status area */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {isComplete ? (
+            <span style={{
+              padding: "2px 10px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+              background: "rgba(34,197,94,0.12)", color: "#22c55e",
+              border: "1px solid rgba(34,197,94,0.2)",
+              whiteSpace: "nowrap",
+            }}>All uploaded</span>
+          ) : (
+            <>
+              {/* Progress bar */}
+              <div style={{
+                width: 80, height: 4, borderRadius: 2, flexShrink: 0,
+                background: "rgba(255,255,255,0.06)", overflow: "hidden",
+              }}>
+                <div style={{
+                  width: `${ticket.progressPercent}%`, height: "100%", borderRadius: 2,
+                  background: hasErrors
+                    ? "linear-gradient(90deg, #22c55e, #ef4444)"
+                    : "linear-gradient(90deg, #22c55e, #f59e0b)",
+                }} />
+              </div>
+              <span style={{
+                fontSize: 11, fontWeight: 700, flexShrink: 0,
+                color: hasErrors ? "#fca5a5" : "#f59e0b",
+                fontVariantNumeric: "tabular-nums",
+              }}>{ticket.progressPercent}%</span>
+
+              {/* Status pills */}
+              {statusPills.map(s => (
+                <span key={s.label} style={{
+                  padding: "2px 8px", borderRadius: 4, fontSize: 9, fontWeight: 600,
+                  background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+                  whiteSpace: "nowrap", flexShrink: 0,
+                }}>{s.label}</span>
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Date */}
+        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", flexShrink: 0, whiteSpace: "nowrap" }}>
+          {ticket.latestCreatedAtStr}
+        </span>
+      </div>
+
+      {/* Expanded details */}
+      <div style={{
+        maxHeight: expanded ? 800 : 0, overflow: "hidden",
+        transition: "max-height 0.3s ease",
+      }}>
+        <div style={{
+          background: "rgba(255,255,255,0.02)",
+          borderTop: "1px solid rgba(255,255,255,0.05)",
+          padding: "16px 20px 16px 44px",
+          display: "flex", flexDirection: "column", gap: 14,
+        }}>
+          {/* Per-platform per-account breakdown */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {PLATFORMS.map(pName => {
+              const accounts = ticket.accountSummary.filter(a => a.platform === pName);
+              return (
+                <div key={pName}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 600, color: "#bbb",
+                    marginBottom: 6,
+                  }}>{pName}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {accounts.map(acc => {
+                      const pct = acc.total > 0 ? (acc.uploaded / acc.total) * 100 : 0;
+                      const color = acc.errors > 0 ? "#ef4444" : pct === 100 ? "#22c55e" : "#f59e0b";
+                      return (
+                        <div key={acc.accountName} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: "3px 8px", borderRadius: 6,
+                          background: "rgba(255,255,255,0.02)",
+                          border: "1px solid rgba(255,255,255,0.04)",
+                        }}>
+                          <span style={{
+                            fontSize: 11, color: "#999", fontWeight: 500,
+                            width: 180, flexShrink: 0, overflow: "hidden",
+                            textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          }}>{acc.accountName}</span>
+                          <div style={{
+                            flex: 1, height: 4, borderRadius: 2,
+                            background: "rgba(255,255,255,0.06)", overflow: "hidden",
+                          }}>
+                            <div style={{
+                              width: `${pct}%`, height: "100%", borderRadius: 2,
+                              background: color, transition: "width 0.3s",
+                            }} />
+                          </div>
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, color,
+                            width: 50, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums",
+                          }}>{acc.uploaded}/{acc.total}</span>
+                          <span style={{ fontSize: 9, color: "#f59e0b", fontWeight: 500, flexShrink: 0, width: 36, textAlign: "right" }}>
+                            {acc.uploading > 0 ? `${acc.uploading} upl` : ""}
+                          </span>
+                          <span style={{ fontSize: 9, color: "#fca5a5", fontWeight: 500, flexShrink: 0, width: 36, textAlign: "right" }}>
+                            {acc.errors > 0 ? `${acc.errors} err` : ""}
+                          </span>
+                          <span style={{ fontSize: 9, color: "#888", fontWeight: 500, flexShrink: 0, width: 40, textAlign: "right" }}>
+                            {acc.skipped > 0 ? `${acc.skipped} skip` : ""}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Actions + View creatives */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              {ticket.totalErrors > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); }}
+                  style={{
+                    background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)",
+                    color: "#fca5a5", borderRadius: 8, padding: "6px 14px",
+                    fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    display: "flex", alignItems: "center", gap: 5,
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.2)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
+                >Retry all errors</button>
+              )}
+              {ticket.totalRemoving > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); }}
+                  style={{
+                    background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.25)",
+                    color: "#c4b5fd", borderRadius: 8, padding: "6px 14px",
+                    fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    display: "flex", alignItems: "center", gap: 5,
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(167,139,250,0.2)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(167,139,250,0.12)"; }}
+                >Stop removing</button>
+              )}
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); onViewCreatives(); }}
+              style={{
+                background: "rgba(212,190,140,0.1)", border: "1px solid rgba(212,190,140,0.2)",
+                color: "#d4be8c", borderRadius: 8, padding: "7px 16px",
+                fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                display: "flex", alignItems: "center", gap: 6,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(212,190,140,0.2)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(212,190,140,0.1)"; }}
+            >
+              View {ticket.creativeCount.toLocaleString()} creatives <span style={{ fontSize: 14 }}>→</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CreativeCard({ creative, onUpdate }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -329,7 +759,7 @@ function CreativeCard({ creative, onUpdate }) {
             <span style={{ color: "#fff", fontSize: 20, marginLeft: 3 }}>▶</span>
           </div>
           <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 500 }}>
-            {creative.duration} · {creative.resolution}
+            {creative.language.toUpperCase()} · {creative.resolution} · {creative.duration}
           </span>
         </div>
         <div style={{ position: "absolute", top: 8, left: 8, display: "flex", gap: 4 }}>
@@ -365,9 +795,10 @@ function CreativeCard({ creative, onUpdate }) {
       <div style={{ padding: "14px 14px 16px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
         <div>
           <h3 style={{
-            margin: 0, fontSize: 14, fontWeight: 700, color: "#e8e6e1",
+            margin: 0, fontSize: 13, fontWeight: 700, color: "#e8e6e1",
             letterSpacing: "-0.01em", lineHeight: 1.3, wordBreak: "break-word",
-          }}>{creative.name}</h3>
+            fontFamily: "monospace",
+          }}>{creative.filename.replace('.mp4', '')}</h3>
           <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
             Created {creative.createdAtStr}
           </span>
@@ -416,6 +847,79 @@ function CreativeCard({ creative, onUpdate }) {
             />
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function TicketHeader({ ticket, onBack }) {
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", gap: 12,
+      padding: "16px 0",
+      borderBottom: "1px solid rgba(255,255,255,0.06)",
+      marginBottom: 16,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+        <button onClick={onBack} style={{
+          background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+          color: "#d4be8c", borderRadius: 8, padding: "6px 12px",
+          fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+          display: "flex", alignItems: "center", gap: 4,
+        }}>
+          <span style={{ fontSize: 14 }}>←</span> All Tickets
+        </button>
+        <span style={{ color: "rgba(255,255,255,0.2)" }}>/</span>
+        <span style={{ color: "#e8e6e1", fontWeight: 600 }}>#{ticket.ticketId}</span>
+        <span style={{
+          padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+          background: "rgba(212,190,140,0.1)", color: "#d4be8c",
+          border: "1px solid rgba(212,190,140,0.15)",
+        }}>{ticket.creativeCount.toLocaleString()} creatives</span>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {ticket.languages.slice(0, 8).map(l => (
+            <span key={l} style={{
+              padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+              background: "rgba(212,190,140,0.1)", color: "rgba(212,190,140,0.7)",
+              border: "1px solid rgba(212,190,140,0.15)",
+            }}>{l.toUpperCase()}</span>
+          ))}
+          {ticket.languages.length > 8 && (
+            <span style={{ padding: "2px 6px", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>
+              +{ticket.languages.length - 8}
+            </span>
+          )}
+        </div>
+        <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.08)" }} />
+        <div style={{ display: "flex", gap: 4 }}>
+          {ticket.resolutions.map(r => (
+            <span key={r} style={{
+              padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 500,
+              background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)",
+              border: "1px solid rgba(255,255,255,0.06)",
+            }}>{r}</span>
+          ))}
+        </div>
+        <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.08)" }} />
+        <div style={{ display: "flex", gap: 4 }}>
+          {ticket.durations.map(d => (
+            <span key={d} style={{
+              padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 500,
+              background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)",
+              border: "1px solid rgba(255,255,255,0.06)",
+            }}>{d}</span>
+          ))}
+        </div>
+        <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.08)" }} />
+        <span style={{
+          fontSize: 11, fontWeight: 600,
+          color: ticket.totalErrors > 0 ? "#fca5a5" : ticket.progressPercent === 100 ? "#22c55e" : "#f59e0b",
+        }}>
+          {ticket.progressPercent}% uploaded{ticket.totalErrors > 0 ? ` · ${ticket.totalErrors} errors` : ""}
+        </span>
       </div>
     </div>
   );
@@ -630,47 +1134,115 @@ const selectStyle = {
 
 export default function ProseccoApp() {
   const BATCH = 24;
-  const [creatives, setCreatives] = useState([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [hasMore, setHasMore] = useState(true);
+
+  // View mode
+  const [viewMode, setViewMode] = useState("tickets");
+  const [selectedTicketId, setSelectedTicketId] = useState(null);
+
+  // App & menu
   const [selectedApp, setSelectedApp] = useState(APPS[0].id);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterAccount, setFilterAccount] = useState("all");
-  const [filterRatio, setFilterRatio] = useState("all");
-  const [filterAfter, setFilterAfter] = useState("");
-  const scrollRef = useRef(null);
-  const sentinelRef = useRef(null);
-  const fetchIdRef = useRef(0);
-  const loadingRef = useRef(false);
-  const hasMoreRef = useRef(true);
+  const [ticketViewLayout, setTicketViewLayout] = useState("list"); // "grid" | "list"
+
+  // Ticket list state
+  const [tickets, setTickets] = useState([]);
+  const [ticketTotalCount, setTicketTotalCount] = useState(0);
+  const [ticketLoading, setTicketLoading] = useState(false);
+  const [ticketInitialLoading, setTicketInitialLoading] = useState(true);
+  const [ticketHasMore, setTicketHasMore] = useState(true);
+
+  // Ticket filters
+  const [ticketSearch, setTicketSearch] = useState("");
+  const [ticketDebouncedSearch, setTicketDebouncedSearch] = useState("");
+  const [ticketFilterStatus, setTicketFilterStatus] = useState("all");
+  const [ticketFilterAfter, setTicketFilterAfter] = useState("");
+
+  // Creative list state
+  const [creatives, setCreatives] = useState([]);
+  const [creativeTotalCount, setCreativeTotalCount] = useState(0);
+  const [creativeLoading, setCreativeLoading] = useState(false);
+  const [creativeInitialLoading, setCreativeInitialLoading] = useState(true);
+  const [creativeHasMore, setCreativeHasMore] = useState(true);
+
+  // Creative filters
+  const [creativeSearch, setCreativeSearch] = useState("");
+  const [creativeDebouncedSearch, setCreativeDebouncedSearch] = useState("");
+  const [creativeFilterStatus, setCreativeFilterStatus] = useState("all");
+  const [creativeFilterAccount, setCreativeFilterAccount] = useState("all");
+  const [creativeFilterResolution, setCreativeFilterResolution] = useState("all");
+  const [creativeFilterAfter, setCreativeFilterAfter] = useState("");
+
+  // Ticket refs
+  const ticketScrollRef = useRef(null);
+  const ticketSentinelRef = useRef(null);
+  const ticketFetchIdRef = useRef(0);
+  const ticketLoadingRef = useRef(false);
+  const ticketHasMoreRef = useRef(true);
+  const ticketsRef = useRef([]);
+  const ticketScrollPosition = useRef(0);
+
+  // Creative refs
+  const creativeScrollRef = useRef(null);
+  const creativeSentinelRef = useRef(null);
+  const creativeFetchIdRef = useRef(0);
+  const creativeLoadingRef = useRef(false);
+  const creativeHasMoreRef = useRef(true);
   const creativesRef = useRef([]);
 
   // Keep refs in sync
+  useEffect(() => { ticketsRef.current = tickets; }, [tickets]);
+  useEffect(() => { ticketHasMoreRef.current = ticketHasMore; }, [ticketHasMore]);
   useEffect(() => { creativesRef.current = creatives; }, [creatives]);
-  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
+  useEffect(() => { creativeHasMoreRef.current = creativeHasMore; }, [creativeHasMore]);
 
-  // Debounce search input
+  // Debounce search inputs
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    const timer = setTimeout(() => setTicketDebouncedSearch(ticketSearch), 350);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [ticketSearch]);
 
-  // Simulate server-side fetch with filters
-  const fetchCreatives = useCallback((offset, params, fetchId) => {
+  useEffect(() => {
+    const timer = setTimeout(() => setCreativeDebouncedSearch(creativeSearch), 350);
+    return () => clearTimeout(timer);
+  }, [creativeSearch]);
+
+  // --- Fetch functions ---
+
+  const fetchTickets = useCallback((offset, params, fetchId) => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const pool = generateCreatives(0, 800);
-        const filtered = pool.filter(c => {
-          if (params.search && !c.name.toLowerCase().includes(params.search.toLowerCase())) return false;
-          if (params.ratio !== "all" && c.ratio !== params.ratio) return false;
-          if (params.after) {
-            if (c.createdAt < new Date(params.after)) return false;
-          }
+        const pool = getPool(params.app);
+        const filtered = pool.tickets.filter(t => {
+          if (params.search && !t.ticketId.toLowerCase().includes(params.search.toLowerCase())) return false;
+          if (params.after && t.latestCreatedAt < new Date(params.after)) return false;
+          if (params.status === "has_errors") return t.totalErrors > 0;
+          if (params.status === "all_uploaded") return t.totalUploaded === t.totalAccounts;
+          if (params.status === "in_progress") return t.totalUploaded < t.totalAccounts && t.totalErrors === 0;
+          return true;
+        });
+
+        const page = filtered.slice(offset, offset + BATCH);
+        resolve({
+          items: page,
+          total: filtered.length,
+          hasMore: offset + BATCH < filtered.length,
+          fetchId,
+        });
+      }, offset === 0 ? 500 : 1200);
+    });
+  }, []);
+
+  const fetchCreativesForTicket = useCallback((offset, params, fetchId) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const pool = getPool(params.app);
+        const ticketCreatives = pool.creatives.filter(c => c.ticketId === params.ticketId);
+
+        const filtered = ticketCreatives.filter(c => {
+          if (params.search && !c.filename.toLowerCase().includes(params.search.toLowerCase())) return false;
+          if (params.resolution !== "all" && c.resolution !== params.resolution) return false;
+          if (params.after && c.createdAt < new Date(params.after)) return false;
+
           const accs = params.account === "all"
             ? getAllAccounts(c)
             : getAllAccounts(c).filter(a => a.accountName === params.account);
@@ -683,73 +1255,129 @@ export default function ProseccoApp() {
           return true;
         });
 
-        const scaledTotal = Math.round((filtered.length / 800) * 8247);
         const page = filtered.slice(offset, offset + BATCH);
-
         resolve({
           items: page,
-          total: scaledTotal,
-          hasMore: offset + BATCH < scaledTotal,
+          total: filtered.length,
+          hasMore: offset + BATCH < filtered.length,
           fetchId,
         });
       }, offset === 0 ? 500 : 1200);
     });
   }, []);
 
-  const currentParams = useMemo(() => ({
-    search: debouncedSearch,
-    status: filterStatus,
-    account: filterAccount,
-    ratio: filterRatio,
-    after: filterAfter,
+  // --- Ticket params & reset ---
+
+  const ticketParams = useMemo(() => ({
+    search: ticketDebouncedSearch,
+    status: ticketFilterStatus,
+    after: ticketFilterAfter,
     app: selectedApp,
-  }), [debouncedSearch, filterStatus, filterAccount, filterRatio, filterAfter, selectedApp]);
-  const currentParamsRef = useRef(currentParams);
-  useEffect(() => { currentParamsRef.current = currentParams; }, [currentParams]);
+  }), [ticketDebouncedSearch, ticketFilterStatus, ticketFilterAfter, selectedApp]);
+  const ticketParamsRef = useRef(ticketParams);
+  useEffect(() => { ticketParamsRef.current = ticketParams; }, [ticketParams]);
 
-  // Reset and fetch when filters change
   useEffect(() => {
-    const id = ++fetchIdRef.current;
-    setInitialLoading(true);
-    setCreatives([]);
-    setHasMore(true);
-    hasMoreRef.current = true;
-    loadingRef.current = false;
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    const id = ++ticketFetchIdRef.current;
+    setTicketInitialLoading(true);
+    setTickets([]);
+    setTicketHasMore(true);
+    ticketHasMoreRef.current = true;
+    ticketLoadingRef.current = false;
+    if (ticketScrollRef.current) ticketScrollRef.current.scrollTop = 0;
 
-    fetchCreatives(0, currentParams, id).then(res => {
-      if (res.fetchId !== fetchIdRef.current) return;
+    fetchTickets(0, ticketParams, id).then(res => {
+      if (res.fetchId !== ticketFetchIdRef.current) return;
+      setTickets(res.items);
+      ticketsRef.current = res.items;
+      setTicketTotalCount(res.total);
+      setTicketHasMore(res.hasMore);
+      ticketHasMoreRef.current = res.hasMore;
+      setTicketInitialLoading(false);
+    });
+  }, [ticketParams, fetchTickets]);
+
+  // --- Creative params & reset ---
+
+  const creativeParams = useMemo(() => ({
+    search: creativeDebouncedSearch,
+    status: creativeFilterStatus,
+    account: creativeFilterAccount,
+    resolution: creativeFilterResolution,
+    after: creativeFilterAfter,
+    app: selectedApp,
+    ticketId: selectedTicketId,
+  }), [creativeDebouncedSearch, creativeFilterStatus, creativeFilterAccount, creativeFilterResolution, creativeFilterAfter, selectedApp, selectedTicketId]);
+  const creativeParamsRef = useRef(creativeParams);
+  useEffect(() => { creativeParamsRef.current = creativeParams; }, [creativeParams]);
+
+  useEffect(() => {
+    if (viewMode !== "creatives" || !selectedTicketId) return;
+
+    const id = ++creativeFetchIdRef.current;
+    setCreativeInitialLoading(true);
+    setCreatives([]);
+    setCreativeHasMore(true);
+    creativeHasMoreRef.current = true;
+    creativeLoadingRef.current = false;
+    if (creativeScrollRef.current) creativeScrollRef.current.scrollTop = 0;
+
+    fetchCreativesForTicket(0, creativeParams, id).then(res => {
+      if (res.fetchId !== creativeFetchIdRef.current) return;
       setCreatives(res.items);
       creativesRef.current = res.items;
-      setTotalCount(res.total);
-      setHasMore(res.hasMore);
-      hasMoreRef.current = res.hasMore;
-      setInitialLoading(false);
+      setCreativeTotalCount(res.total);
+      setCreativeHasMore(res.hasMore);
+      creativeHasMoreRef.current = res.hasMore;
+      setCreativeInitialLoading(false);
     });
-  }, [currentParams, fetchCreatives]);
+  }, [creativeParams, viewMode, fetchCreativesForTicket]);
 
-  const allAccountNames = useMemo(() => {
-    const s = new Set();
-    Object.values(ACCOUNT_NAMES).forEach(names => names.forEach(n => s.add(n)));
-    return [...s].sort();
-  }, []);
+  // --- Handle creative update ---
 
   const handleUpdate = useCallback((updated) => {
     setCreatives(prev => prev.map(c => c.id === updated.id ? updated : c));
   }, []);
 
-  // Stable loadMore using refs
-  const loadMore = useCallback(() => {
-    if (loadingRef.current || !hasMoreRef.current) return;
-    loadingRef.current = true;
-    setLoading(true);
-    const id = fetchIdRef.current;
+  // --- Load more functions ---
+
+  const loadMoreTickets = useCallback(() => {
+    if (ticketLoadingRef.current || !ticketHasMoreRef.current) return;
+    ticketLoadingRef.current = true;
+    setTicketLoading(true);
+    const id = ticketFetchIdRef.current;
+    const offset = ticketsRef.current.length;
+
+    fetchTickets(offset, ticketParamsRef.current, id).then(res => {
+      if (res.fetchId !== ticketFetchIdRef.current) {
+        ticketLoadingRef.current = false;
+        setTicketLoading(false);
+        return;
+      }
+      setTickets(prev => {
+        const next = [...prev, ...res.items];
+        ticketsRef.current = next;
+        return next;
+      });
+      setTicketTotalCount(res.total);
+      setTicketHasMore(res.hasMore);
+      ticketHasMoreRef.current = res.hasMore;
+      ticketLoadingRef.current = false;
+      setTicketLoading(false);
+    });
+  }, [fetchTickets]);
+
+  const loadMoreCreatives = useCallback(() => {
+    if (creativeLoadingRef.current || !creativeHasMoreRef.current) return;
+    creativeLoadingRef.current = true;
+    setCreativeLoading(true);
+    const id = creativeFetchIdRef.current;
     const offset = creativesRef.current.length;
 
-    fetchCreatives(offset, currentParamsRef.current, id).then(res => {
-      if (res.fetchId !== fetchIdRef.current) {
-        loadingRef.current = false;
-        setLoading(false);
+    fetchCreativesForTicket(offset, creativeParamsRef.current, id).then(res => {
+      if (res.fetchId !== creativeFetchIdRef.current) {
+        creativeLoadingRef.current = false;
+        setCreativeLoading(false);
         return;
       }
       setCreatives(prev => {
@@ -757,32 +1385,88 @@ export default function ProseccoApp() {
         creativesRef.current = next;
         return next;
       });
-      setTotalCount(res.total);
-      setHasMore(res.hasMore);
-      hasMoreRef.current = res.hasMore;
-      loadingRef.current = false;
-      setLoading(false);
+      setCreativeTotalCount(res.total);
+      setCreativeHasMore(res.hasMore);
+      creativeHasMoreRef.current = res.hasMore;
+      creativeLoadingRef.current = false;
+      setCreativeLoading(false);
     });
-  }, [fetchCreatives]);
+  }, [fetchCreativesForTicket]);
 
-  // IntersectionObserver — stable, never re-created
+  // --- IntersectionObservers ---
+
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    const container = scrollRef.current;
+    if (viewMode !== "tickets") return;
+    const sentinel = ticketSentinelRef.current;
+    const container = ticketScrollRef.current;
     if (!sentinel || !container) return;
 
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) loadMore();
-      },
+      (entries) => { if (entries[0].isIntersecting) loadMoreTickets(); },
       { root: container, rootMargin: "400px" }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadMore]);
+  }, [viewMode, loadMoreTickets]);
 
-  // Creatives are already filtered server-side
-  const filtered = creatives;
+  useEffect(() => {
+    if (viewMode !== "creatives") return;
+    const sentinel = creativeSentinelRef.current;
+    const container = creativeScrollRef.current;
+    if (!sentinel || !container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMoreCreatives(); },
+      { root: container, rootMargin: "400px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [viewMode, loadMoreCreatives]);
+
+  // --- Navigation ---
+
+  const selectedTicket = useMemo(() => {
+    if (!selectedTicketId) return null;
+    const pool = getPool(selectedApp);
+    return pool.tickets.find(t => t.ticketId === selectedTicketId) || null;
+  }, [selectedTicketId, selectedApp]);
+
+  const handleTicketClick = useCallback((ticketId) => {
+    if (ticketScrollRef.current) {
+      ticketScrollPosition.current = ticketScrollRef.current.scrollTop;
+    }
+    setSelectedTicketId(ticketId);
+    setViewMode("creatives");
+    setCreativeSearch("");
+    setCreativeDebouncedSearch("");
+    setCreativeFilterStatus("all");
+    setCreativeFilterAccount("all");
+    setCreativeFilterResolution("all");
+    setCreativeFilterAfter("");
+  }, []);
+
+  const handleBackToTickets = useCallback(() => {
+    setViewMode("tickets");
+    setSelectedTicketId(null);
+    requestAnimationFrame(() => {
+      if (ticketScrollRef.current) {
+        ticketScrollRef.current.scrollTop = ticketScrollPosition.current;
+      }
+    });
+  }, []);
+
+  // Reset to tickets when app changes
+  useEffect(() => {
+    setViewMode("tickets");
+    setSelectedTicketId(null);
+  }, [selectedApp]);
+
+  // --- Derived ---
+
+  const appName = APPS.find(a => a.id === selectedApp)?.name;
+  const activeSearch = viewMode === "tickets" ? ticketSearch : creativeSearch;
+  const activeDebouncedSearch = viewMode === "tickets" ? ticketDebouncedSearch : creativeDebouncedSearch;
+  const setActiveSearch = viewMode === "tickets" ? setTicketSearch : setCreativeSearch;
 
   return (
     <div style={{
@@ -876,21 +1560,34 @@ export default function ProseccoApp() {
       <main style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 60px)", overflow: "hidden" }}>
         {/* Sticky header + filters */}
         <div style={{ padding: "24px 24px 0", maxWidth: 1440, margin: "0 auto", width: "100%", flexShrink: 0 }}>
-        {/* Header */}
+
+        {/* Ticket Header (breadcrumb) when in creative view */}
+        {viewMode === "creatives" && selectedTicket && (
+          <TicketHeader ticket={selectedTicket} onBack={handleBackToTickets} />
+        )}
+
+        {/* Header row */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: 16, marginBottom: 16, flexWrap: "wrap",
         }}>
           <div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "#e8e6e1", lineHeight: 1 }}>Creatives</h1>
+            <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "#e8e6e1", lineHeight: 1 }}>
+              {viewMode === "tickets" ? "Tickets" : "Creatives"}
+            </h1>
             <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
-              {initialLoading ? "Loading…" : `Showing ${filtered.length.toLocaleString()} of ${totalCount.toLocaleString()} creatives`} · {APPS.find(a => a.id === selectedApp)?.name}
+              {viewMode === "tickets"
+                ? (ticketInitialLoading ? "Loading…" : `Showing ${tickets.length.toLocaleString()} of ${ticketTotalCount.toLocaleString()} tickets`)
+                : (creativeInitialLoading ? "Loading…" : `Showing ${creatives.length.toLocaleString()} of ${creativeTotalCount.toLocaleString()} creatives`)
+              } · {appName}
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div style={{ position: "relative" }}>
-              <input type="text" placeholder="Search creatives..." value={search}
-                onChange={e => setSearch(e.target.value)}
+              <input type="text"
+                placeholder={viewMode === "tickets" ? "Search by ticket ID..." : "Search by filename..."}
+                value={activeSearch}
+                onChange={e => setActiveSearch(e.target.value)}
                 style={{
                   background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
                   color: "#e8e6e1", borderRadius: 10, padding: "9px 14px 9px 36px",
@@ -903,7 +1600,7 @@ export default function ProseccoApp() {
                 position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
                 color: "rgba(255,255,255,0.25)", fontSize: 14, pointerEvents: "none",
               }}>⌕</span>
-              {search !== debouncedSearch && (
+              {activeSearch !== activeDebouncedSearch && (
                 <span style={{
                   position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
                   width: 12, height: 12, border: "1.5px solid rgba(212,190,140,0.2)",
@@ -912,6 +1609,30 @@ export default function ProseccoApp() {
                 }} />
               )}
             </div>
+            {viewMode === "tickets" && (
+              <div style={{
+                display: "flex", background: "rgba(255,255,255,0.06)",
+                borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)",
+                overflow: "hidden",
+              }}>
+                {[
+                  { value: "list", icon: "☰" },
+                  { value: "grid", icon: "▦" },
+                ].map(opt => (
+                  <button key={opt.value}
+                    onClick={() => setTicketViewLayout(opt.value)}
+                    style={{
+                      background: ticketViewLayout === opt.value ? "rgba(212,190,140,0.15)" : "transparent",
+                      border: "none",
+                      color: ticketViewLayout === opt.value ? "#d4be8c" : "rgba(255,255,255,0.35)",
+                      padding: "6px 10px", fontSize: 14, cursor: "pointer",
+                      fontFamily: "inherit", transition: "all 0.15s",
+                      lineHeight: 1,
+                    }}
+                  >{opt.icon}</button>
+                ))}
+              </div>
+            )}
             <button style={{
               background: "linear-gradient(135deg, #d4be8c 0%, #b8a274 100%)",
               border: "none", color: "#141310", borderRadius: 10,
@@ -934,124 +1655,241 @@ export default function ProseccoApp() {
             textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4,
           }}>Filters</span>
 
-          <CustomSelect
-            value={filterStatus}
-            onChange={setFilterStatus}
-            width={180}
-            options={[
-              { value: "all", label: "All Statuses" },
-              { value: "errors", label: "Errors" },
-              { value: "uploading", label: "Uploading / Queued" },
-              { value: "skipped", label: "Skipped" },
-              { value: "complete", label: "Complete" },
-            ]}
-          />
+          {viewMode === "tickets" ? (
+            <>
+              <CustomSelect
+                value={ticketFilterStatus}
+                onChange={setTicketFilterStatus}
+                width={180}
+                options={[
+                  { value: "all", label: "All Statuses" },
+                  { value: "has_errors", label: "Has Errors" },
+                  { value: "all_uploaded", label: "All Uploaded" },
+                  { value: "in_progress", label: "In Progress" },
+                ]}
+              />
 
-          <CustomAccountSelect value={filterAccount} onChange={setFilterAccount} />
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500, whiteSpace: "nowrap" }}>Created after:</span>
+                <input type="date" value={ticketFilterAfter} onChange={e => setTicketFilterAfter(e.target.value)}
+                  style={{
+                    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+                    color: "#e8e6e1", borderRadius: 8, padding: "6px 10px",
+                    fontSize: 12, fontFamily: "inherit", outline: "none", colorScheme: "dark",
+                  }}
+                />
+              </div>
 
-          <CustomSelect
-            value={filterRatio}
-            onChange={setFilterRatio}
-            width={140}
-            options={[
-              { value: "all", label: "All Ratios" },
-              ...RATIOS.map(r => ({ value: r, label: r })),
-            ]}
-          />
+              {(ticketFilterStatus !== "all" || ticketFilterAfter) && (
+                <button onClick={() => { setTicketFilterStatus("all"); setTicketFilterAfter(""); }}
+                  style={{
+                    background: "none", border: "1px solid rgba(255,255,255,0.1)",
+                    color: "rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 12px",
+                    fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                    marginLeft: "auto",
+                  }}>✕ Clear filters</button>
+              )}
+            </>
+          ) : (
+            <>
+              <CustomSelect
+                value={creativeFilterStatus}
+                onChange={setCreativeFilterStatus}
+                width={180}
+                options={[
+                  { value: "all", label: "All Statuses" },
+                  { value: "errors", label: "Errors" },
+                  { value: "uploading", label: "Uploading / Queued" },
+                  { value: "skipped", label: "Skipped" },
+                  { value: "complete", label: "Complete" },
+                ]}
+              />
 
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500, whiteSpace: "nowrap" }}>Created after:</span>
-            <input type="date" value={filterAfter} onChange={e => setFilterAfter(e.target.value)}
-              style={{
-                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
-                color: "#e8e6e1", borderRadius: 8, padding: "6px 10px",
-                fontSize: 12, fontFamily: "inherit", outline: "none", colorScheme: "dark",
-              }}
-            />
+              <CustomAccountSelect value={creativeFilterAccount} onChange={setCreativeFilterAccount} />
+
+              <CustomSelect
+                value={creativeFilterResolution}
+                onChange={setCreativeFilterResolution}
+                width={160}
+                options={[
+                  { value: "all", label: "All Resolutions" },
+                  ...RESOLUTIONS.map(r => ({ value: `${r.w}x${r.h}`, label: `${r.w}x${r.h} (${r.ratio})` })),
+                ]}
+              />
+
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500, whiteSpace: "nowrap" }}>Created after:</span>
+                <input type="date" value={creativeFilterAfter} onChange={e => setCreativeFilterAfter(e.target.value)}
+                  style={{
+                    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+                    color: "#e8e6e1", borderRadius: 8, padding: "6px 10px",
+                    fontSize: 12, fontFamily: "inherit", outline: "none", colorScheme: "dark",
+                  }}
+                />
+              </div>
+
+              {(creativeFilterStatus !== "all" || creativeFilterAccount !== "all" || creativeFilterResolution !== "all" || creativeFilterAfter) && (
+                <button onClick={() => { setCreativeFilterStatus("all"); setCreativeFilterAccount("all"); setCreativeFilterResolution("all"); setCreativeFilterAfter(""); }}
+                  style={{
+                    background: "none", border: "1px solid rgba(255,255,255,0.1)",
+                    color: "rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 12px",
+                    fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                    marginLeft: "auto",
+                  }}>✕ Clear filters</button>
+              )}
+            </>
+          )}
+        </div>
+        </div>
+
+        {/* === TICKET VIEW === */}
+        {viewMode === "tickets" && (
+          <div ref={ticketScrollRef} style={{ flex: 1, overflowY: "auto", padding: "0 24px 48px" }}>
+            {!ticketInitialLoading && ticketViewLayout === "grid" && (
+              <div style={{
+                maxWidth: 1440, margin: "0 auto",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+                gap: 20,
+              }}>
+                {tickets.map(t => (
+                  <TicketCard key={t.ticketId} ticket={t} onClick={() => handleTicketClick(t.ticketId)} />
+                ))}
+              </div>
+            )}
+
+            {!ticketInitialLoading && ticketViewLayout === "list" && (
+              <div style={{
+                maxWidth: 1440, margin: "0 auto",
+                display: "flex", flexDirection: "column", gap: 6,
+              }}>
+                {tickets.map(t => (
+                  <TicketListRow key={t.ticketId} ticket={t} onViewCreatives={() => handleTicketClick(t.ticketId)} />
+                ))}
+              </div>
+            )}
+
+            {ticketInitialLoading && (
+              <div style={{
+                display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "center", padding: "80px 20px", gap: 12,
+              }}>
+                <div style={{
+                  width: 28, height: 28, border: "2.5px solid rgba(212,190,140,0.2)",
+                  borderTopColor: "#d4be8c", borderRadius: "50%",
+                  animation: "prosecco-spin 0.7s linear infinite",
+                }} />
+                <span style={{ fontSize: 14, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>
+                  Loading tickets…
+                </span>
+              </div>
+            )}
+
+            {!ticketInitialLoading && tickets.length === 0 && !ticketLoading && (
+              <div style={{ textAlign: "center", padding: "80px 20px", color: "rgba(255,255,255,0.25)" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>∅</div>
+                <div style={{ fontSize: 15, fontWeight: 500 }}>No tickets found</div>
+                <div style={{ fontSize: 13, marginTop: 4 }}>Try adjusting your search or filters</div>
+              </div>
+            )}
+
+            {ticketLoading && !ticketInitialLoading && (
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: "32px 0 16px", gap: 10,
+              }}>
+                <div style={{
+                  width: 20, height: 20, border: "2px solid rgba(212,190,140,0.2)",
+                  borderTopColor: "#d4be8c", borderRadius: "50%",
+                  animation: "prosecco-spin 0.7s linear infinite",
+                }} />
+                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>
+                  Loading more… ({tickets.length.toLocaleString()} / {ticketTotalCount.toLocaleString()})
+                </span>
+              </div>
+            )}
+
+            {!ticketHasMore && tickets.length > 0 && !ticketInitialLoading && (
+              <div style={{
+                textAlign: "center", padding: "24px 0 8px",
+                fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 500,
+              }}>
+                All {tickets.length.toLocaleString()} tickets loaded
+              </div>
+            )}
+
+            <div ref={ticketSentinelRef} style={{ height: 1 }} />
           </div>
+        )}
 
-          {(filterStatus !== "all" || filterAccount !== "all" || filterRatio !== "all" || filterAfter) && (
-            <button onClick={() => { setFilterStatus("all"); setFilterAccount("all"); setFilterRatio("all"); setFilterAfter(""); }}
-              style={{
-                background: "none", border: "1px solid rgba(255,255,255,0.1)",
-                color: "rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 12px",
-                fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-                marginLeft: "auto",
-              }}>✕ Clear filters</button>
-          )}
-        </div>
-        </div>
-
-        {/* Scrollable grid area */}
-        <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "0 24px 48px" }}>
-          {!initialLoading && (
-            <div style={{
-              maxWidth: 1440, margin: "0 auto",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
-              gap: 20,
-            }}>
-              {filtered.map(c => (
-                <CreativeCard key={c.id} creative={c} onUpdate={handleUpdate} />
-              ))}
-            </div>
-          )}
-
-          {/* Initial loading skeleton */}
-          {initialLoading && (
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center",
-              justifyContent: "center", padding: "80px 20px", gap: 12,
-            }}>
+        {/* === CREATIVE VIEW === */}
+        {viewMode === "creatives" && (
+          <div ref={creativeScrollRef} style={{ flex: 1, overflowY: "auto", padding: "0 24px 48px" }}>
+            {!creativeInitialLoading && (
               <div style={{
-                width: 28, height: 28, border: "2.5px solid rgba(212,190,140,0.2)",
-                borderTopColor: "#d4be8c", borderRadius: "50%",
-                animation: "prosecco-spin 0.7s linear infinite",
-              }} />
-              <span style={{ fontSize: 14, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>
-                Loading creatives…
-              </span>
-            </div>
-          )}
+                maxWidth: 1440, margin: "0 auto",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+                gap: 20,
+              }}>
+                {creatives.map(c => (
+                  <CreativeCard key={c.id} creative={c} onUpdate={handleUpdate} />
+                ))}
+              </div>
+            )}
 
-          {!initialLoading && filtered.length === 0 && !loading && (
-            <div style={{ textAlign: "center", padding: "80px 20px", color: "rgba(255,255,255,0.25)" }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>∅</div>
-              <div style={{ fontSize: 15, fontWeight: 500 }}>No creatives found</div>
-              <div style={{ fontSize: 13, marginTop: 4 }}>Try adjusting your search or filters</div>
-            </div>
-          )}
-
-          {/* Loading more indicator */}
-          {loading && !initialLoading && (
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "32px 0 16px", gap: 10,
-            }}>
+            {creativeInitialLoading && (
               <div style={{
-                width: 20, height: 20, border: "2px solid rgba(212,190,140,0.2)",
-                borderTopColor: "#d4be8c", borderRadius: "50%",
-                animation: "prosecco-spin 0.7s linear infinite",
-              }} />
-              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>
-                Loading more… ({creatives.length.toLocaleString()} / {totalCount.toLocaleString()})
-              </span>
-            </div>
-          )}
+                display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "center", padding: "80px 20px", gap: 12,
+              }}>
+                <div style={{
+                  width: 28, height: 28, border: "2.5px solid rgba(212,190,140,0.2)",
+                  borderTopColor: "#d4be8c", borderRadius: "50%",
+                  animation: "prosecco-spin 0.7s linear infinite",
+                }} />
+                <span style={{ fontSize: 14, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>
+                  Loading creatives…
+                </span>
+              </div>
+            )}
 
-          {/* End of list */}
-          {!hasMore && filtered.length > 0 && !initialLoading && (
-            <div style={{
-              textAlign: "center", padding: "24px 0 8px",
-              fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 500,
-            }}>
-              All {creatives.length.toLocaleString()} creatives loaded
-            </div>
-          )}
+            {!creativeInitialLoading && creatives.length === 0 && !creativeLoading && (
+              <div style={{ textAlign: "center", padding: "80px 20px", color: "rgba(255,255,255,0.25)" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>∅</div>
+                <div style={{ fontSize: 15, fontWeight: 500 }}>No creatives found</div>
+                <div style={{ fontSize: 13, marginTop: 4 }}>Try adjusting your search or filters</div>
+              </div>
+            )}
 
-          {/* Sentinel for IntersectionObserver */}
-          <div ref={sentinelRef} style={{ height: 1 }} />
-        </div>
+            {creativeLoading && !creativeInitialLoading && (
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: "32px 0 16px", gap: 10,
+              }}>
+                <div style={{
+                  width: 20, height: 20, border: "2px solid rgba(212,190,140,0.2)",
+                  borderTopColor: "#d4be8c", borderRadius: "50%",
+                  animation: "prosecco-spin 0.7s linear infinite",
+                }} />
+                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>
+                  Loading more… ({creatives.length.toLocaleString()} / {creativeTotalCount.toLocaleString()})
+                </span>
+              </div>
+            )}
+
+            {!creativeHasMore && creatives.length > 0 && !creativeInitialLoading && (
+              <div style={{
+                textAlign: "center", padding: "24px 0 8px",
+                fontSize: 12, color: "rgba(255,255,255,0.2)", fontWeight: 500,
+              }}>
+                All {creatives.length.toLocaleString()} creatives loaded
+              </div>
+            )}
+
+            <div ref={creativeSentinelRef} style={{ height: 1 }} />
+          </div>
+        )}
       </main>
     </div>
   );
